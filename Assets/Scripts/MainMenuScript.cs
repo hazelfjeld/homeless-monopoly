@@ -4,7 +4,6 @@ using UnityEngine;
 
 public class MainMenuScript : MonoBehaviour
 {
-
     public GameObject panel;
 
     public void OptionsAppear()
