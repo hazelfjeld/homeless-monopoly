@@ -13,27 +13,15 @@ public class BoardSpaceData
     [Tooltip("Only used when SpaceType is Jump.")]
     public int JumpAmount;
 
+    [Tooltip("Drag the invisible point object here.")]
+    public Transform WorldPosition;
+
     public BoardSpaceData()
     {
         SpaceName = "";
         SpaceType = BoardSpaceType.Go;
         Description = "";
         JumpAmount = 0;
-    }
-
-    public BoardSpaceData(string spaceName, BoardSpaceType spaceType)
-    {
-        SpaceName = spaceName;
-        SpaceType = spaceType;
-        Description = "";
-        JumpAmount = 0;
-    }
-
-    public BoardSpaceData(string spaceName, BoardSpaceType spaceType, int jumpAmount)
-    {
-        SpaceName = spaceName;
-        SpaceType = spaceType;
-        Description = "";
-        JumpAmount = jumpAmount;
+        WorldPosition = null;
     }
 }

@@ -3,6 +3,10 @@ using UnityEngine;
 
 public class EscapeHomelessnessGameManager : MonoBehaviour
 {
+    [Header("Token Visual")]
+    [SerializeField] private Transform playerTokenTransform;
+    [SerializeField] private Vector3 tokenOffset = new Vector3(0f, 0.35f, 0f);
+
     [Header("Board")]
     [SerializeField] private List<BoardSpaceData> boardSpaces = new List<BoardSpaceData>();
     [SerializeField] private bool startPlayersOnFirstGoSpace = true;
@@ -90,6 +94,32 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         communityDeck.ResetDeck();
     }
 
+    private void UpdateSingleTokenPosition(Player player)
+    {
+        if (player == null)
+        {
+            return;
+        }
+
+        if (playerTokenTransform == null)
+        {
+            return;
+        }
+
+        if (player.BoardIndex < 0 || player.BoardIndex >= boardSpaces.Count)
+        {
+            return;
+        }
+
+        BoardSpaceData currentSpace = boardSpaces[player.BoardIndex];
+
+        if (currentSpace == null || currentSpace.WorldPosition == null)
+        {
+            return;
+        }
+
+        playerTokenTransform.position = currentSpace.WorldPosition.position + tokenOffset;
+    }
     public void PlayCurrentPlayerTurn()
     {
         if (gameIsOver)
@@ -330,6 +360,8 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         int clampedIndex = Mathf.Clamp(targetIndex, 0, boardSpaces.Count - 1);
         player.BoardIndex = clampedIndex;
+
+        UpdateSingleTokenPosition(player);
     }
 
     private int FindNextSpaceOfType(int startingIndex, BoardSpaceType targetSpaceType)
