@@ -5,6 +5,7 @@ using UnityEngine;
 [Serializable]
 public class Player
 {
+    
     [Header("Character Info")]
     public string CharacterName;
     public int Age;
@@ -35,6 +36,9 @@ public class Player
     public bool HasBackpack;
     public bool IsInRelationship;
     public bool IsVeteran;
+
+    public bool IsStudent;
+    public bool AttendsChurchFrequently;
 
     [Header("Game-Specific Resources")]
     public bool HasBirthCertificate;
@@ -124,6 +128,7 @@ public class Player
     {
         switch (flagType)
         {
+            
             case PlayerFlagType.HasCar:
                 return HasCar;
 
@@ -171,7 +176,11 @@ public class Player
 
             case PlayerFlagType.IsVeteran:
                 return IsVeteran;
+            case PlayerFlagType.IsStudent:
+                return IsStudent;
 
+            case PlayerFlagType.AttendsChurchFrequently:
+                return AttendsChurchFrequently;
             case PlayerFlagType.HasBirthCertificate:
                 return HasBirthCertificate;
 
@@ -277,6 +286,13 @@ public class Player
 
             case PlayerFlagType.IsVeteran:
                 IsVeteran = value;
+                break;
+            case PlayerFlagType.IsStudent:
+                IsStudent = value;
+                break;
+
+            case PlayerFlagType.AttendsChurchFrequently:
+                AttendsChurchFrequently = value;
                 break;
 
             case PlayerFlagType.HasBirthCertificate:
@@ -443,6 +459,10 @@ public enum PlayerFlagType
     HasBackpack,
     IsInRelationship,
     IsVeteran,
+
+    IsStudent,
+
+    AttendsChurchFrequently,
     HasBirthCertificate,
     HasSocialSecurityCard,
     HasCaseworker,
@@ -474,6 +494,9 @@ public enum PlayerCheckType
     HasBackpack,
     IsInRelationship,
     IsVeteran,
+
+    IsStudent,
+    AttendsChurchFrequently,
     HasBirthCertificate,
     HasSocialSecurityCard,
     HasCaseworker,

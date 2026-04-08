@@ -87,6 +87,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         currentPlayerIndex = 0;
         gameIsOver = false;
         lastTurnSummary = "Game started.";
+        UpdateSingleTokenPosition(CurrentPlayer);
 
         goDeck.ResetDeck();
         stopDeck.ResetDeck();
@@ -328,6 +329,8 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
             return;
         }
 
+        int occurrenceCount = Mathf.Max(1, Mathf.Abs(movementInstruction.SpaceCount));
+
         switch (movementInstruction.MovementMode)
         {
             case MovementMode.None:
@@ -338,18 +341,25 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
                 return;
 
             case MovementMode.NextSpaceOfType:
-                MovePlayerToIndex(player, FindNextSpaceOfType(player.BoardIndex, movementInstruction.TargetSpaceType));
+                MovePlayerToIndex(
+                    player,
+                    FindNextSpaceOfType(player.BoardIndex, movementInstruction.TargetSpaceType, occurrenceCount));
                 return;
 
             case MovementMode.PreviousSpaceOfType:
-                MovePlayerToIndex(player, FindPreviousSpaceOfType(player.BoardIndex, movementInstruction.TargetSpaceType));
+                MovePlayerToIndex(
+                    player,
+                    FindPreviousSpaceOfType(player.BoardIndex, movementInstruction.TargetSpaceType, occurrenceCount));
                 return;
 
             case MovementMode.NearestSpaceOfType:
-                MovePlayerToIndex(player, FindNearestSpaceOfType(player.BoardIndex, movementInstruction.TargetSpaceType));
+                MovePlayerToIndex(
+                    player,
+                    FindNearestSpaceOfType(player.BoardIndex, movementInstruction.TargetSpaceType));
                 return;
         }
     }
+
 
     private void MovePlayerToIndex(Player player, int targetIndex)
     {
@@ -364,11 +374,20 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         UpdateSingleTokenPosition(player);
     }
 
-    private int FindNextSpaceOfType(int startingIndex, BoardSpaceType targetSpaceType)
+    private int FindNextSpaceOfType(int startingIndex, BoardSpaceType targetSpaceType, int occurrences = 1)
     {
+        int foundCount = 0;
+
         for (int boardIndex = startingIndex + 1; boardIndex < boardSpaces.Count; boardIndex++)
         {
-            if (boardSpaces[boardIndex].SpaceType == targetSpaceType)
+            if (boardSpaces[boardIndex].SpaceType != targetSpaceType)
+            {
+                continue;
+            }
+
+            foundCount++;
+
+            if (foundCount >= occurrences)
             {
                 return boardIndex;
             }
@@ -377,11 +396,20 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         return startingIndex;
     }
 
-    private int FindPreviousSpaceOfType(int startingIndex, BoardSpaceType targetSpaceType)
+    private int FindPreviousSpaceOfType(int startingIndex, BoardSpaceType targetSpaceType, int occurrences = 1)
     {
+        int foundCount = 0;
+
         for (int boardIndex = startingIndex - 1; boardIndex >= 0; boardIndex--)
         {
-            if (boardSpaces[boardIndex].SpaceType == targetSpaceType)
+            if (boardSpaces[boardIndex].SpaceType != targetSpaceType)
+            {
+                continue;
+            }
+
+            foundCount++;
+
+            if (foundCount >= occurrences)
             {
                 return boardIndex;
             }
@@ -523,5 +551,22 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         }
 
         return currentSpace.SpaceType.ToString();
+    }
+        private void Awake()
+    {
+        LoadDeckData();
+    }
+
+    private void LoadDeckData()
+    {
+        goDeck.DeckName = "Go Deck";
+        stopDeck.DeckName = "Stop Deck";
+        questionDeck.DeckName = "Question Deck";
+        communityDeck.DeckName = "Community Deck";
+
+        goDeck.StartingCards = EscapeHomelessnessCardLibrary.CreateGoCards();
+        stopDeck.StartingCards = EscapeHomelessnessCardLibrary.CreateStopCards();
+        questionDeck.StartingCards = EscapeHomelessnessCardLibrary.CreateQuestionCards();
+        communityDeck.StartingCards = EscapeHomelessnessCardLibrary.CreateCommunityCards();
     }
 }
