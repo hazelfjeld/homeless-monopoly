@@ -19,6 +19,7 @@ public class UnityServicesInit : MonoBehaviour
         {
             await AuthenticationService.Instance.SignInAnonymouslyAsync();
             Debug.Log("Signed in as: " + AuthenticationService.Instance.PlayerId);
+            await AuthenticationService.Instance.UpdatePlayerNameAsync("Player" + Random.Range(1000, 9999));
         }
     }
 }
