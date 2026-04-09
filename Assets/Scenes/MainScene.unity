@@ -179,16 +179,16 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Button
+  m_text: COM
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 0}
-  m_sharedMaterial: {fileID: 0}
+  m_fontAsset: {fileID: 11400000, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
+  m_sharedMaterial: {fileID: -2214979473871397031, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4281479730
   m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -201,7 +201,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -1727,16 +1727,16 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Button
+  m_text: GO
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 0}
-  m_sharedMaterial: {fileID: 0}
+  m_fontAsset: {fileID: 11400000, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
+  m_sharedMaterial: {fileID: -2214979473871397031, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4281479730
   m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -1749,7 +1749,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -2256,7 +2256,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
+  m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
   m_SortingOrder: 0
@@ -2669,8 +2669,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: effea60ff19d74549b9a902884972343, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerTokenTransform: {fileID: 1910064418}
-  tokenOffset: {x: 0, y: 0.35, z: 0}
   boardSpaces:
   - SpaceName: Point_00_Go
     SpaceType: 1
@@ -2698,7 +2696,7 @@ MonoBehaviour:
     JumpAmount: 0
     WorldPosition: {fileID: 1245674040}
   - SpaceName: Point_05_Go
-    SpaceType: 2
+    SpaceType: 1
     Description: 
     JumpAmount: 0
     WorldPosition: {fileID: 641369210}
@@ -2959,6 +2957,11 @@ MonoBehaviour:
     IsInShelter: 1
     NeedsMedication: 1
     HasMedication: 0
+  stopDeck:
+    DeckName: 
+    StartingCards: []
+    drawPile: []
+    discardPile: []
   goDeck:
     DeckName: 
     StartingCards:
@@ -2983,7 +2986,7 @@ MonoBehaviour:
         FlagChanges: []
     drawPile: []
     discardPile: []
-  stopDeck:
+  communityDeck:
     DeckName: 
     StartingCards: []
     drawPile: []
@@ -2993,15 +2996,15 @@ MonoBehaviour:
     StartingCards: []
     drawPile: []
     discardPile: []
-  communityDeck:
-    DeckName: 
-    StartingCards: []
-    drawPile: []
-    discardPile: []
+  playerTokenTransform: {fileID: 1910064418}
+  tokenOffset: {x: 0, y: 0.35, z: 0}
+  autoStartGame: 1
   activePlayers: []
   currentPlayerIndex: 0
   gameIsOver: 0
   lastTurnSummary: 
+  waitingForCardButtonPress: 0
+  requiredCardButtonType: 0
 --- !u!4 &624362569
 Transform:
   m_ObjectHideFlags: 0
@@ -3227,7 +3230,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 653839587}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 624362568}
+        m_TargetAssemblyTypeName: EscapeHomelessnessGameManager, Assembly-CSharp
+        m_MethodName: PressCommunityButton
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &653839587
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3544,16 +3559,16 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Button
+  m_text: Stop
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 0}
-  m_sharedMaterial: {fileID: 0}
+  m_fontAsset: {fileID: 11400000, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
+  m_sharedMaterial: {fileID: -2214979473871397031, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4281479730
   m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -3566,7 +3581,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -5651,7 +5666,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1262234856}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 624362568}
+        m_TargetAssemblyTypeName: EscapeHomelessnessGameManager, Assembly-CSharp
+        m_MethodName: PressStopButton
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1262234856
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6530,16 +6557,16 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Button
+  m_text: '?'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 0}
-  m_sharedMaterial: {fileID: 0}
+  m_fontAsset: {fileID: 11400000, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
+  m_sharedMaterial: {fileID: -2214979473871397031, guid: 008db317c7e729c45ad449ffae3cfef8, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4281479730
   m_fontColor: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -6552,7 +6579,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -7375,7 +7402,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1617080276}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 624362568}
+        m_TargetAssemblyTypeName: EscapeHomelessnessGameManager, Assembly-CSharp
+        m_MethodName: PressGoButton
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1617080276
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9158,7 +9197,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1973533858}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 624362568}
+        m_TargetAssemblyTypeName: EscapeHomelessnessGameManager, Assembly-CSharp
+        m_MethodName: PressQuestionButton
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1973533858
 MonoBehaviour:
   m_ObjectHideFlags: 0
