@@ -1,4 +1,6 @@
+using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class EscapeHomelessnessGameManager : MonoBehaviour
@@ -20,6 +22,15 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     [SerializeField] private Transform playerTokenTransform;
     [SerializeField] private Vector3 tokenOffset = new Vector3(0f, 0.35f, 0f);
 
+    [Header("Popup UI")]
+    [SerializeField] private GameObject cardPopupPanel;
+    [SerializeField] private TMP_Text cardPopupTitleText;
+    [SerializeField] private TMP_Text cardPopupBodyText;
+    [SerializeField] private TMP_Text statusText;
+
+    [Header("Timing")]
+    [SerializeField] private float jumpDelaySeconds = 0.5f;
+
     [Header("Startup")]
     [SerializeField] private bool autoStartGame = true;
 
@@ -32,6 +43,8 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     [Header("Card Button Flow")]
     [SerializeField] private bool waitingForCardButtonPress;
     [SerializeField] private BoardSpaceType requiredCardButtonType = BoardSpaceType.Start;
+    [SerializeField] private bool waitingForPopupClose;
+    [SerializeField] private bool turnBusy;
 
     public string LastTurnSummary => lastTurnSummary;
     public bool GameIsOver => gameIsOver;
@@ -59,6 +72,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     private void Awake()
     {
         LoadDeckData();
+        HideCardPopup();
     }
 
     private void Start()
@@ -91,14 +105,14 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     {
         if (boardSpaces == null || boardSpaces.Count == 0)
         {
-            lastTurnSummary = "No board spaces have been set up yet.";
+            SetStatus("No board spaces have been set up yet.");
             Debug.LogWarning(lastTurnSummary);
             return;
         }
 
         if (selectedCharacterTemplates == null || selectedCharacterTemplates.Count == 0)
         {
-            lastTurnSummary = "No character templates were provided.";
+            SetStatus("No character templates were provided.");
             Debug.LogWarning(lastTurnSummary);
             return;
         }
@@ -121,7 +135,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         if (activePlayers.Count == 0)
         {
-            lastTurnSummary = "No playable characters were created.";
+            SetStatus("No playable characters were created.");
             Debug.LogWarning(lastTurnSummary);
             return;
         }
@@ -129,15 +143,18 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         currentPlayerIndex = 0;
         gameIsOver = false;
         waitingForCardButtonPress = false;
+        waitingForPopupClose = false;
         requiredCardButtonType = BoardSpaceType.Start;
-        lastTurnSummary = "Game started.";
+        turnBusy = false;
 
         stopDeck.ResetDeck();
         goDeck.ResetDeck();
         communityDeck.ResetDeck();
         questionDeck.ResetDeck();
 
+        HideCardPopup();
         UpdateSingleTokenPosition(CurrentPlayer);
+        SetStatus("Game started.");
         BeginCurrentPlayerTurn();
     }
 
@@ -166,9 +183,30 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         TryResolveCardButton(BoardSpaceType.Question);
     }
 
+    public void CloseCardPopup()
+    {
+        if (!waitingForPopupClose)
+        {
+            HideCardPopup();
+            return;
+        }
+
+        waitingForPopupClose = false;
+        HideCardPopup();
+
+        Player activePlayer = CurrentPlayer;
+
+        if (activePlayer == null || gameIsOver)
+        {
+            return;
+        }
+
+        StartCoroutine(ResolveAutomaticMovementAndEndTurn(activePlayer));
+    }
+
     private void BeginCurrentPlayerTurn()
     {
-        if (gameIsOver)
+        if (gameIsOver || turnBusy || waitingForPopupClose)
         {
             return;
         }
@@ -177,7 +215,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         if (activePlayer == null)
         {
-            lastTurnSummary = "No active player found.";
+            SetStatus("No active player found.");
             return;
         }
 
@@ -188,11 +226,10 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         if (activePlayer.TurnsToWait > 0)
         {
             ResolveWaitingTurn(activePlayer);
-            CheckForWinAfterMovement(activePlayer);
 
             if (!gameIsOver)
             {
-                FinishTurn();
+                StartCoroutine(ResolveAutomaticMovementAndEndTurn(activePlayer));
             }
 
             return;
@@ -202,7 +239,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         if (currentSpace == null)
         {
-            lastTurnSummary = $"{activePlayer.CharacterName} is not on a valid board space.";
+            SetStatus($"{activePlayer.CharacterName} is not on a valid board space.");
             FinishTurn();
             return;
         }
@@ -210,23 +247,8 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         switch (currentSpace.SpaceType)
         {
             case BoardSpaceType.Start:
-                ResolveStartSpace(activePlayer);
-                CheckForWinAfterMovement(activePlayer);
-
-                if (!gameIsOver)
-                {
-                    FinishTurn();
-                }
-                return;
-
             case BoardSpaceType.Jump:
-                ResolveJumpSpace(activePlayer, currentSpace);
-                CheckForWinAfterMovement(activePlayer);
-
-                if (!gameIsOver)
-                {
-                    FinishTurn();
-                }
+                StartCoroutine(ResolveStartOfTurnAutomaticSpaces(activePlayer));
                 return;
 
             case BoardSpaceType.Home:
@@ -239,11 +261,11 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
             case BoardSpaceType.Question:
                 waitingForCardButtonPress = true;
                 requiredCardButtonType = currentSpace.SpaceType;
-                lastTurnSummary = $"{activePlayer.CharacterName} is on a {currentSpace.SpaceType} space. Click the matching button.";
+                SetStatus($"{activePlayer.CharacterName} is on a {currentSpace.SpaceType} space. Click the matching button.");
                 return;
 
             default:
-                lastTurnSummary = "Unsupported space type.";
+                SetStatus("Unsupported space type.");
                 FinishTurn();
                 return;
         }
@@ -251,14 +273,20 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
     private void TryResolveCardButton(BoardSpaceType pressedButtonType)
     {
-        if (gameIsOver)
+        if (gameIsOver || turnBusy)
         {
+            return;
+        }
+
+        if (waitingForPopupClose)
+        {
+            SetStatus("Close the current card before clicking another button.");
             return;
         }
 
         if (!waitingForCardButtonPress)
         {
-            lastTurnSummary = "You are not waiting for a card button right now.";
+            SetStatus("You are not waiting for a card button right now.");
             return;
         }
 
@@ -266,13 +294,13 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         if (activePlayer == null)
         {
-            lastTurnSummary = "No active player found.";
+            SetStatus("No active player found.");
             return;
         }
 
         if (pressedButtonType != requiredCardButtonType)
         {
-            lastTurnSummary = $"Wrong button. This player is on a {requiredCardButtonType} space.";
+            SetStatus($"Wrong button. This player is on a {requiredCardButtonType} space.");
             return;
         }
 
@@ -282,36 +310,50 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         if (currentSpace == null)
         {
-            lastTurnSummary = "Current board space could not be found.";
+            SetStatus("Current board space could not be found.");
             FinishTurn();
             return;
         }
 
-        ResolveCardSpace(activePlayer, currentSpace);
-        CheckForWinAfterMovement(activePlayer);
+        bool resolvedSuccessfully = TryResolveCardSpace(
+            activePlayer,
+            currentSpace,
+            out string popupTitle,
+            out string popupBody);
 
-        if (!gameIsOver)
+        if (!resolvedSuccessfully)
         {
             FinishTurn();
+            return;
         }
+
+        waitingForPopupClose = true;
+        ShowCardPopup(popupTitle, popupBody);
     }
 
-    private void ResolveCardSpace(Player player, BoardSpaceData currentSpace)
+    private bool TryResolveCardSpace(
+        Player player,
+        BoardSpaceData currentSpace,
+        out string popupTitle,
+        out string popupBody)
     {
+        popupTitle = "";
+        popupBody = "";
+
         CardDeck correctDeck = GetDeckForSpaceType(currentSpace.SpaceType);
 
         if (correctDeck == null)
         {
-            lastTurnSummary = $"No deck is assigned for {currentSpace.SpaceType} spaces.";
-            return;
+            SetStatus($"No deck is assigned for {currentSpace.SpaceType} spaces.");
+            return false;
         }
 
         Card drawnCard = correctDeck.Draw();
 
         if (drawnCard == null)
         {
-            lastTurnSummary = $"The {currentSpace.SpaceType} deck is empty.";
-            return;
+            SetStatus($"The {currentSpace.SpaceType} deck is empty.");
+            return false;
         }
 
         CardResolution cardResolution = player.ApplyCard(drawnCard);
@@ -333,24 +375,147 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
             resolutionText = drawnCard.RulesText;
         }
 
-        lastTurnSummary = $"{player.CharacterName} drew '{drawnCard.Title}'. {resolutionText}";
+        popupTitle = drawnCard.Title;
+        popupBody = drawnCard.RulesText;
+
+        if (resolutionText != drawnCard.RulesText)
+        {
+            popupBody += "\n\nResult: " + resolutionText;
+        }
 
         if (cardResolution.WaitTurnsAdded > 0)
         {
-            lastTurnSummary += $" Wait turns added: {cardResolution.WaitTurnsAdded}.";
+            popupBody += $"\n\nWait turns added: {cardResolution.WaitTurnsAdded}";
         }
 
         if (cardResolution.CashChangeAmount != 0)
         {
-            lastTurnSummary += $" Cash change: {cardResolution.CashChangeAmount}.";
+            popupBody += $"\nCash change: {cardResolution.CashChangeAmount}";
         }
 
         if (shouldMoveImmediately)
         {
-            lastTurnSummary += $" New space: {GetCurrentSpaceName(player)}.";
+            popupBody += $"\n\nNew space: {GetCurrentSpaceName(player)}";
         }
 
         UpdateSingleTokenPosition(player);
+        SetStatus($"{player.CharacterName} drew '{drawnCard.Title}'.");
+
+        return true;
+    }
+
+    private IEnumerator ResolveStartOfTurnAutomaticSpaces(Player player)
+    {
+        turnBusy = true;
+
+        while (player != null && !gameIsOver)
+        {
+            BoardSpaceData currentSpace = GetCurrentSpace(player);
+
+            if (currentSpace == null)
+            {
+                break;
+            }
+
+            if (currentSpace.SpaceType == BoardSpaceType.Start)
+            {
+                ResolveStartSpace(player);
+                yield return null;
+            }
+            else if (currentSpace.SpaceType == BoardSpaceType.Jump)
+            {
+                yield return new WaitForSeconds(jumpDelaySeconds);
+                ResolveJumpSpace(player, currentSpace);
+            }
+            else
+            {
+                break;
+            }
+
+            CheckForWinAfterMovement(player);
+
+            if (gameIsOver)
+            {
+                turnBusy = false;
+                yield break;
+            }
+        }
+
+        turnBusy = false;
+
+        if (gameIsOver || player == null)
+        {
+            yield break;
+        }
+
+        BoardSpaceData finalSpace = GetCurrentSpace(player);
+
+        if (finalSpace == null)
+        {
+            FinishTurn();
+            yield break;
+        }
+
+        switch (finalSpace.SpaceType)
+        {
+            case BoardSpaceType.Stop:
+            case BoardSpaceType.Go:
+            case BoardSpaceType.Community:
+            case BoardSpaceType.Question:
+                waitingForCardButtonPress = true;
+                requiredCardButtonType = finalSpace.SpaceType;
+                SetStatus($"{player.CharacterName} is on a {finalSpace.SpaceType} space. Click the matching button.");
+                break;
+
+            case BoardSpaceType.Home:
+                DeclareWinner(player, $"{player.CharacterName} reached Home.");
+                break;
+
+            default:
+                FinishTurn();
+                break;
+        }
+    }
+
+    private IEnumerator ResolveAutomaticMovementAndEndTurn(Player player)
+    {
+        turnBusy = true;
+
+        while (player != null && !gameIsOver)
+        {
+            BoardSpaceData currentSpace = GetCurrentSpace(player);
+
+            if (currentSpace == null)
+            {
+                break;
+            }
+
+            if (currentSpace.SpaceType == BoardSpaceType.Jump)
+            {
+                yield return new WaitForSeconds(jumpDelaySeconds);
+                ResolveJumpSpace(player, currentSpace);
+                CheckForWinAfterMovement(player);
+
+                if (gameIsOver)
+                {
+                    turnBusy = false;
+                    yield break;
+                }
+
+                continue;
+            }
+
+            break;
+        }
+
+        turnBusy = false;
+
+        if (gameIsOver)
+        {
+            yield break;
+        }
+
+        FinishTurn();
     }
 
     private void ResolveWaitingTurn(Player player)
@@ -359,11 +524,11 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         if (player.TurnsToWait > 0)
         {
-            lastTurnSummary = $"{player.CharacterName} must wait {player.TurnsToWait} more turn(s).";
+            SetStatus($"{player.CharacterName} must wait {player.TurnsToWait} more turn(s).");
             return;
         }
 
-        lastTurnSummary = $"{player.CharacterName} finished waiting.";
+        SetStatus($"{player.CharacterName} finished waiting.");
 
         bool hasPendingMovement =
             player.PendingMovement != null &&
@@ -373,7 +538,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         {
             ApplyMovementInstruction(player, player.PendingMovement);
             player.ClearDelayedMovement();
-            lastTurnSummary += $" Then moved to {GetCurrentSpaceName(player)}.";
+            SetStatus($"{player.CharacterName} finished waiting and moved to {GetCurrentSpaceName(player)}.");
         }
 
         UpdateSingleTokenPosition(player);
@@ -385,12 +550,12 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         if (firstGoSpaceIndex == -1)
         {
-            lastTurnSummary = "No GO space was found on the board.";
+            SetStatus("No GO space was found on the board.");
             return;
         }
 
         MovePlayerToIndex(player, firstGoSpaceIndex);
-        lastTurnSummary = $"{player.CharacterName} moved from Start to the first GO space.";
+        SetStatus($"{player.CharacterName} moved from Start to the first GO space.");
     }
 
     private void ResolveJumpSpace(Player player, BoardSpaceData jumpSpace)
@@ -400,7 +565,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         string directionWord = jumpSpace.JumpAmount >= 0 ? "forward" : "back";
         int absoluteJumpAmount = Mathf.Abs(jumpSpace.JumpAmount);
 
-        lastTurnSummary = $"{player.CharacterName} hit a jump space and moved {directionWord} {absoluteJumpAmount} space(s).";
+        SetStatus($"{player.CharacterName} hit an explosion space and moved {directionWord} {absoluteJumpAmount} space(s).");
     }
 
     private void ApplyMovementInstruction(Player player, MovementInstruction movementInstruction)
@@ -478,6 +643,44 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         }
 
         playerTokenTransform.position = currentSpace.WorldPosition.position + tokenOffset;
+    }
+
+    private void ShowCardPopup(string title, string body)
+    {
+        if (cardPopupTitleText != null)
+        {
+            cardPopupTitleText.text = title;
+        }
+
+        if (cardPopupBodyText != null)
+        {
+            cardPopupBodyText.text = body;
+        }
+
+        if (cardPopupPanel != null)
+        {
+            cardPopupPanel.SetActive(true);
+        }
+    }
+
+    private void HideCardPopup()
+    {
+        if (cardPopupPanel != null)
+        {
+            cardPopupPanel.SetActive(false);
+        }
+    }
+
+    private void SetStatus(string message)
+    {
+        lastTurnSummary = message;
+
+        if (statusText != null)
+        {
+            statusText.text = message;
+        }
+
+        Debug.Log(message);
     }
 
     private int FindFirstSpaceOfType(BoardSpaceType targetSpaceType)
@@ -586,9 +789,11 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     {
         gameIsOver = true;
         waitingForCardButtonPress = false;
+        waitingForPopupClose = false;
         requiredCardButtonType = BoardSpaceType.Start;
-        lastTurnSummary = summaryText;
-        Debug.Log(summaryText);
+        turnBusy = false;
+        HideCardPopup();
+        SetStatus(summaryText);
     }
 
     private void FinishTurn()
