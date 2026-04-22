@@ -153,59 +153,47 @@ private string BuildPlayerStatusText(Player player)
     statusBuilder.AppendLine();
 
     statusBuilder.AppendLine("Resources:");
-    AppendStatusLineIfTrue(statusBuilder, player.HasPhone, "Phone");
-    AppendStatusLineIfTrue(statusBuilder, player.HasWorkingPhone, "Working phone");
-    AppendStatusLineIfTrue(statusBuilder, player.HasCar, "Car");
-    AppendStatusLineIfTrue(statusBuilder, player.HasDriversLicense, "Driver's license");
-    AppendStatusLineIfTrue(statusBuilder, player.HasId, "ID");
-    AppendStatusLineIfTrue(statusBuilder, player.HasBirthCertificate, "Birth certificate");
-    AppendStatusLineIfTrue(statusBuilder, player.HasSocialSecurityCard, "Social Security card");
-    AppendStatusLineIfTrue(statusBuilder, player.HasBackpack, "Backpack");
-    AppendStatusLineIfTrue(statusBuilder, player.HasJob, "Job");
-    AppendStatusLineIfTrue(statusBuilder, player.HasShelter, "Shelter");
-    AppendStatusLineIfTrue(statusBuilder, player.IsInShelter, "Currently in shelter");
-    AppendStatusLineIfTrue(statusBuilder, player.HasPlaceToSleep, "Place to sleep");
-    AppendStatusLineIfTrue(statusBuilder, player.HasSafePlaceDuringDay, "Safe place during the day");
-    AppendStatusLineIfTrue(statusBuilder, player.HasCleanClothes, "Clean clothes");
-    AppendStatusLineIfTrue(statusBuilder, player.HasHealthInsurance, "Health insurance");
-    AppendStatusLineIfTrue(statusBuilder, player.HasCaseworker, "Caseworker");
-    AppendStatusLineIfTrue(statusBuilder, player.HasGedOrDiploma, "GED / Diploma");
-    AppendStatusLineIfTrue(statusBuilder, player.IsLiterate, "Can read");
-    AppendStatusLineIfTrue(statusBuilder, player.IsHealthy, "Healthy");
-    AppendStatusLineIfTrue(statusBuilder, player.IsVeteran, "Veteran");
-    AppendStatusLineIfTrue(statusBuilder, player.IsStudent, "Student");
-    AppendStatusLineIfTrue(statusBuilder, player.AttendsChurchFrequently, "Church attendance");
+    bool hasAnyResources = false;
+
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasPhone, "Phone", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasWorkingPhone, "Working phone", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasCar, "Car", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasDriversLicense, "Driver's license", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasId, "ID", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasBirthCertificate, "Birth certificate", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasSocialSecurityCard, "Social Security card", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasBackpack, "Backpack", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasJob, "Job", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasShelter, "Shelter", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsInShelter, "Currently in shelter", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasPlaceToSleep, "Place to sleep", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasSafePlaceDuringDay, "Safe place during the day", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasCleanClothes, "Clean clothes", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasHealthInsurance, "Health insurance", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasCaseworker, "Caseworker", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasGedOrDiploma, "GED / Diploma", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsLiterate, "Can read", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsHealthy, "Healthy", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsVeteran, "Veteran", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsStudent, "Student", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.AttendsChurchFrequently, "Church attendance", statusBuilder);
+
+    if (!hasAnyResources)
+    {
+        statusBuilder.AppendLine("- None listed");
+    }
 
     statusBuilder.AppendLine();
     statusBuilder.AppendLine("Barriers:");
-    AppendStatusLineIfTrue(statusBuilder, player.HasAddiction, "Addiction");
-    AppendStatusLineIfTrue(statusBuilder, player.HasCriminalRecord, "Criminal record");
-    AppendStatusLineIfTrue(statusBuilder, player.HasBeenEvictedInThePast, "Previously evicted");
-    AppendStatusLineIfTrue(statusBuilder, player.HasBeenToJail, "Been to jail");
-    AppendStatusLineIfTrue(statusBuilder, player.NeedsMedication, "Needs medication");
+    bool hasAnyBarriers = false;
 
-    if (!player.HasPhone &&
-        !player.HasWorkingPhone &&
-        !player.HasCar &&
-        !player.HasDriversLicense &&
-        !player.HasId &&
-        !player.HasBirthCertificate &&
-        !player.HasSocialSecurityCard &&
-        !player.HasBackpack &&
-        !player.HasJob &&
-        !player.HasShelter &&
-        !player.IsInShelter &&
-        !player.HasPlaceToSleep &&
-        !player.HasSafePlaceDuringDay &&
-        !player.HasCleanClothes &&
-        !player.HasHealthInsurance &&
-        !player.HasCaseworker &&
-        !player.HasGedOrDiploma &&
-        !player.IsLiterate &&
-        !player.IsHealthy &&
-        !player.IsVeteran &&
-        !player.IsStudent &&
-        !player.AttendsChurchFrequently)
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasAddiction, "Addiction", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasCriminalRecord, "Criminal record", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasBeenEvictedInThePast, "Previously evicted", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasBeenToJail, "Been to jail", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.NeedsMedication, "Needs medication", statusBuilder);
+
+    if (!hasAnyBarriers)
     {
         statusBuilder.AppendLine("- None listed");
     }
@@ -213,6 +201,16 @@ private string BuildPlayerStatusText(Player player)
     return statusBuilder.ToString();
 }
 
+private bool AppendStatusLineIfTrueAndReturn(bool condition, string label, StringBuilder statusBuilder)
+{
+    if (!condition)
+    {
+        return false;
+    }
+
+    statusBuilder.AppendLine($"- {label}");
+    return true;
+}
     private void AppendStatusLineIfTrue(StringBuilder statusBuilder, bool condition, string label)
     {
         if (condition)
