@@ -6,6 +6,13 @@ using System.Text;
 
 public class EscapeHomelessnessGameManager : MonoBehaviour
 {
+
+    [Header("Win Screen UI")]
+    [SerializeField] private GameObject winScreenPanel;
+    [SerializeField] private TMP_Text winScreenTitleText;
+    [SerializeField] private TMP_Text winScreenBodyText;
+    [SerializeField] private string donationUrl = "https://www.google.com";
+
     [Header("Player Status UI")]
     [SerializeField] private GameObject playerStatusPanel;
     [SerializeField] private TMP_Text playerStatusTitleText;
@@ -218,11 +225,60 @@ private bool AppendStatusLineIfTrueAndReturn(bool condition, string label, Strin
             statusBuilder.AppendLine($"- {label}");
         }
     }
+
+    public void DonateButtonPressed()
+{
+    Application.OpenURL(donationUrl);
+}
+
+public void CloseWinScreen()
+{
+    HideWinScreen();
+}
+
+private void ShowWinScreen(Player winningPlayer)
+{
+    if (winScreenTitleText != null)
+    {
+        winScreenTitleText.text = "You Escaped Homelessness";
+    }
+
+    if (winScreenBodyText != null)
+    {
+        if (winningPlayer != null)
+        {
+            winScreenBodyText.text =
+                $"{winningPlayer.CharacterName} won the game.\n\n" +
+                "Thank you for playing.\n" +
+                "If you'd like, you can donate to support homeless shelters.";
+        }
+        else
+        {
+            winScreenBodyText.text =
+                "A player won the game.\n\n" +
+                "If you'd like, you can donate to support homeless shelters.";
+        }
+    }
+
+    if (winScreenPanel != null)
+    {
+        winScreenPanel.SetActive(true);
+    }
+}
+
+private void HideWinScreen()
+{
+    if (winScreenPanel != null)
+    {
+        winScreenPanel.SetActive(false);
+    }
+}
     private void Awake()
     {
         LoadDeckData();
         HideCardPopup();
         HidePlayerStatusPopup();
+        HideWinScreen();
     }
 
     private void Start()
@@ -307,7 +363,7 @@ private bool AppendStatusLineIfTrueAndReturn(bool condition, string label, Strin
         goDeck.ResetDeck();
         communityDeck.ResetDeck();
         questionDeck.ResetDeck();
-
+        HideWinScreen();
         HideCardPopup();
         UpdateSingleTokenPosition(CurrentPlayer);
         RefreshPlayerStatusPopup();
@@ -1129,8 +1185,10 @@ private bool AppendStatusLineIfTrueAndReturn(bool condition, string label, Strin
         waitingForPopupClose = false;
         requiredCardButtonType = BoardSpaceType.Start;
         turnBusy = false;
+
         HideCardPopup();
         SetStatus(summaryText);
+        ShowWinScreen(player);
     }
 
     private void FinishTurn()
