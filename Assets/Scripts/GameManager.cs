@@ -2,10 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using System.Text;
 
 public class EscapeHomelessnessGameManager : MonoBehaviour
 {
-
+    [Header("Player Status UI")]
+    [SerializeField] private GameObject playerStatusPanel;
+    [SerializeField] private TMP_Text playerStatusTitleText;
+    [SerializeField] private TMP_Text playerStatusBodyText;
     [Header("Character Select UI")]
     [SerializeField] private GameObject characterSelectPanel;
     [SerializeField] private TMP_Text characterSelectNameText;
@@ -78,10 +82,147 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         }
     }
 
+public void OpenPlayerStatusPopup()
+{
+    Player activePlayer = CurrentPlayer;
+
+    if (activePlayer == null)
+    {
+        SetStatus("There is no active player right now.");
+        return;
+    }
+
+    RefreshPlayerStatusPopup();
+
+    if (playerStatusPanel != null)
+    {
+        playerStatusPanel.SetActive(true);
+    }
+}
+
+public void ClosePlayerStatusPopup()
+{
+    HidePlayerStatusPopup();
+}
+
+private void HidePlayerStatusPopup()
+{
+    if (playerStatusPanel != null)
+    {
+        playerStatusPanel.SetActive(false);
+    }
+}
+
+private void RefreshPlayerStatusPopup()
+{
+    Player activePlayer = CurrentPlayer;
+
+    if (activePlayer == null)
+    {
+        if (playerStatusTitleText != null)
+        {
+            playerStatusTitleText.text = "No Active Player";
+        }
+
+        if (playerStatusBodyText != null)
+        {
+            playerStatusBodyText.text = "";
+        }
+
+        return;
+    }
+
+    if (playerStatusTitleText != null)
+    {
+        playerStatusTitleText.text = $"{activePlayer.CharacterName}, Age {activePlayer.Age}";
+    }
+
+    if (playerStatusBodyText != null)
+    {
+        playerStatusBodyText.text = BuildPlayerStatusText(activePlayer);
+    }
+}
+
+private string BuildPlayerStatusText(Player player)
+{
+    StringBuilder statusBuilder = new StringBuilder();
+
+    statusBuilder.AppendLine($"Current space: {GetCurrentSpaceName(player)}");
+    statusBuilder.AppendLine($"Cash: ${player.CashAmount}");
+    statusBuilder.AppendLine($"Wait turns: {player.TurnsToWait}");
+    statusBuilder.AppendLine();
+
+    statusBuilder.AppendLine("Resources:");
+    bool hasAnyResources = false;
+
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasPhone, "Phone", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasWorkingPhone, "Working phone", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasCar, "Car", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasDriversLicense, "Driver's license", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasId, "ID", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasBirthCertificate, "Birth certificate", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasSocialSecurityCard, "Social Security card", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasBackpack, "Backpack", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasJob, "Job", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasShelter, "Shelter", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsInShelter, "Currently in shelter", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasPlaceToSleep, "Place to sleep", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasSafePlaceDuringDay, "Safe place during the day", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasCleanClothes, "Clean clothes", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasHealthInsurance, "Health insurance", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasCaseworker, "Caseworker", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.HasGedOrDiploma, "GED / Diploma", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsLiterate, "Can read", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsHealthy, "Healthy", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsVeteran, "Veteran", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.IsStudent, "Student", statusBuilder);
+    hasAnyResources |= AppendStatusLineIfTrueAndReturn(player.AttendsChurchFrequently, "Church attendance", statusBuilder);
+
+    if (!hasAnyResources)
+    {
+        statusBuilder.AppendLine("- None listed");
+    }
+
+    statusBuilder.AppendLine();
+    statusBuilder.AppendLine("Barriers:");
+    bool hasAnyBarriers = false;
+
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasAddiction, "Addiction", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasCriminalRecord, "Criminal record", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasBeenEvictedInThePast, "Previously evicted", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.HasBeenToJail, "Been to jail", statusBuilder);
+    hasAnyBarriers |= AppendStatusLineIfTrueAndReturn(player.NeedsMedication, "Needs medication", statusBuilder);
+
+    if (!hasAnyBarriers)
+    {
+        statusBuilder.AppendLine("- None listed");
+    }
+
+    return statusBuilder.ToString();
+}
+
+private bool AppendStatusLineIfTrueAndReturn(bool condition, string label, StringBuilder statusBuilder)
+{
+    if (!condition)
+    {
+        return false;
+    }
+
+    statusBuilder.AppendLine($"- {label}");
+    return true;
+}
+    private void AppendStatusLineIfTrue(StringBuilder statusBuilder, bool condition, string label)
+    {
+        if (condition)
+        {
+            statusBuilder.AppendLine($"- {label}");
+        }
+    }
     private void Awake()
     {
         LoadDeckData();
         HideCardPopup();
+        HidePlayerStatusPopup();
     }
 
     private void Start()
@@ -169,6 +310,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         HideCardPopup();
         UpdateSingleTokenPosition(CurrentPlayer);
+        RefreshPlayerStatusPopup();
         SetStatus("Game started.");
         BeginCurrentPlayerTurn();
     }
@@ -810,6 +952,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         int clampedIndex = Mathf.Clamp(targetIndex, 0, boardSpaces.Count - 1);
         player.BoardIndex = clampedIndex;
         UpdateSingleTokenPosition(player);
+        RefreshPlayerStatusPopup();
     }
 
     private void UpdateSingleTokenPosition(Player player)
