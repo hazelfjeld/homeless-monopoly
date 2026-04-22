@@ -5,6 +5,15 @@ using UnityEngine;
 
 public class EscapeHomelessnessGameManager : MonoBehaviour
 {
+
+    [Header("Character Select UI")]
+    [SerializeField] private GameObject characterSelectPanel;
+    [SerializeField] private TMP_Text characterSelectNameText;
+    [SerializeField] private TMP_Text characterSelectDescriptionText;
+    [SerializeField] private TMP_Text characterSelectHintText;
+    [SerializeField] private bool showCharacterSelectOnStart = true;
+
+    private int selectedCharacterIndex = -1;
     [Header("Board")]
     [SerializeField] private List<BoardSpaceData> boardSpaces = new List<BoardSpaceData>();
     [SerializeField] private bool startPlayersOnFirstGoSpace = true;
@@ -77,6 +86,12 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
     private void Start()
     {
+        if (showCharacterSelectOnStart)
+        {
+            ShowCharacterSelect();
+            return;
+        }
+
         if (autoStartGame)
         {
             StartGameWithAllTemplates();
@@ -158,6 +173,185 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
         BeginCurrentPlayerTurn();
     }
 
+
+    public void SelectCharacter(int characterIndex)
+    {
+        if (characterTemplates == null || characterTemplates.Count == 0)
+        {
+            SetStatus("No character templates exist yet.");
+            return;
+        }
+
+        if (characterIndex < 0 || characterIndex >= characterTemplates.Count)
+        {
+            SetStatus("That character index is out of range.");
+            return;
+        }
+
+        selectedCharacterIndex = characterIndex;
+
+        Player selectedCharacter = characterTemplates[characterIndex];
+
+        if (characterSelectNameText != null)
+        {
+            characterSelectNameText.text = $"{selectedCharacter.CharacterName}, Age {selectedCharacter.Age}";
+        }
+
+        if (characterSelectDescriptionText != null)
+        {
+            characterSelectDescriptionText.text = BuildCharacterPreviewText(selectedCharacter);
+        }
+
+        if (characterSelectHintText != null)
+        {
+            characterSelectHintText.text = "Press Start Game to use this character.";
+        }
+    }
+
+    public void ConfirmCharacterSelection()
+    {
+        if (selectedCharacterIndex < 0)
+        {
+            SetStatus("Pick a character first.");
+            return;
+        }
+
+        if (characterTemplates == null || selectedCharacterIndex >= characterTemplates.Count)
+        {
+            SetStatus("That character is missing.");
+            return;
+        }
+
+        HideCharacterSelect();
+
+        Player selectedCharacter = characterTemplates[selectedCharacterIndex];
+        StartGame(new List<Player> { selectedCharacter });
+    }
+
+    public void StartGameWithCharacterIndex(int characterIndex)
+    {
+        if (characterTemplates == null || characterTemplates.Count == 0)
+        {
+            SetStatus("No character templates exist yet.");
+            return;
+        }
+
+        if (characterIndex < 0 || characterIndex >= characterTemplates.Count)
+        {
+            SetStatus("That character index is out of range.");
+            return;
+        }
+
+        HideCharacterSelect();
+        StartGame(new List<Player> { characterTemplates[characterIndex] });
+    }
+
+    private void ShowCharacterSelect()
+    {
+        HideCardPopup();
+
+        gameIsOver = false;
+        waitingForCardButtonPress = false;
+        waitingForPopupClose = false;
+        turnBusy = false;
+
+        if (characterSelectPanel != null)
+        {
+            characterSelectPanel.SetActive(true);
+        }
+
+        if (characterTemplates != null && characterTemplates.Count > 0)
+        {
+            SelectCharacter(0);
+        }
+        else
+        {
+            if (characterSelectNameText != null)
+            {
+                characterSelectNameText.text = "No Characters Found";
+            }
+
+            if (characterSelectDescriptionText != null)
+            {
+                characterSelectDescriptionText.text = "Add preset characters to the Character Templates list in the GameManager inspector.";
+            }
+
+            if (characterSelectHintText != null)
+            {
+                characterSelectHintText.text = "";
+            }
+        }
+    }
+
+    private void HideCharacterSelect()
+    {
+        if (characterSelectPanel != null)
+        {
+            characterSelectPanel.SetActive(false);
+        }
+    }
+
+    private string BuildCharacterPreviewText(Player player)
+    {
+        if (player == null)
+        {
+            return "";
+        }
+
+        string previewText = "";
+
+        if (!string.IsNullOrWhiteSpace(player.Backstory))
+        {
+            previewText += player.Backstory;
+        }
+
+        if (player.CashAmount > 0)
+        {
+            if (previewText.Length > 0)
+            {
+                previewText += "\n\n";
+            }
+
+            previewText += $"Starting cash: ${player.CashAmount}";
+        }
+
+        List<string> startingTraits = new List<string>();
+
+        if (player.HasPhone) startingTraits.Add("Phone");
+        if (player.HasWorkingPhone) startingTraits.Add("Working phone");
+        if (player.HasCar) startingTraits.Add("Car");
+        if (player.HasDriversLicense) startingTraits.Add("Driver's license");
+        if (player.HasId) startingTraits.Add("ID");
+        if (player.HasBirthCertificate) startingTraits.Add("Birth certificate");
+        if (player.HasSocialSecurityCard) startingTraits.Add("Social Security card");
+        if (player.HasShelter) startingTraits.Add("Shelter");
+        if (player.IsInShelter) startingTraits.Add("In shelter");
+        if (player.HasPlaceToSleep) startingTraits.Add("Place to sleep");
+        if (player.HasCleanClothes) startingTraits.Add("Clean clothes");
+        if (player.HasGedOrDiploma) startingTraits.Add("GED/Diploma");
+        if (player.IsLiterate) startingTraits.Add("Can read");
+        if (player.HasCaseworker) startingTraits.Add("Caseworker");
+        if (player.HasJob) startingTraits.Add("Job");
+        if (player.IsHealthy) startingTraits.Add("Healthy");
+        if (player.HasAddiction) startingTraits.Add("Addiction");
+        if (player.HasBeenEvictedInThePast) startingTraits.Add("Previously evicted");
+        if (player.HasBeenToJail) startingTraits.Add("Been to jail");
+        if (player.IsVeteran) startingTraits.Add("Veteran");
+        if (player.IsStudent) startingTraits.Add("Student");
+        if (player.AttendsChurchFrequently) startingTraits.Add("Frequent church attendance");
+
+        if (startingTraits.Count > 0)
+        {
+            if (previewText.Length > 0)
+            {
+                previewText += "\n\n";
+            }
+
+            previewText += "Starting traits: " + string.Join(", ", startingTraits);
+        }
+
+        return previewText;
+    }
     public void PlayCurrentPlayerTurn()
     {
         BeginCurrentPlayerTurn();
