@@ -14,6 +14,7 @@ public class LobbyManager : MonoBehaviour
 
     public TMP_Text lobbyCodeText;
     public TMP_Text playerListText;
+    public TMP_Text statusText;
     public TMP_InputField joinCodeInput;
 
     private ISession activeSession;
@@ -45,6 +46,7 @@ public class LobbyManager : MonoBehaviour
 
         lobbyCodeText.text = "Code: Creating...";
         playerListText.text = "Players:\n- Host";
+        SetStatus("Creating lobby as host...");
 
         await CreateHostLobby();
     }
@@ -64,11 +66,14 @@ public class LobbyManager : MonoBehaviour
             string hostName = GetLocalDisplayName();
             playerListText.text = "Players:\n- " + hostName;
             LobbyGameBootstrap.SetLobbyPlayers(new[] { hostName });
+            SetStatus("Lobby created. Share the code and wait for players.");
+
         }
         catch (SessionException e)
         {
             Debug.LogError("Failed to create lobby: " + e.Message);
             lobbyCodeText.text = "Code: Failed";
+            SetStatus("Failed to create lobby.");
         }
     }
 
@@ -76,6 +81,7 @@ public class LobbyManager : MonoBehaviour
     {
         mainMenuPanel.SetActive(false);
         joinLobbyPanel.SetActive(true);
+        SetStatus("Enter a code to join a lobby.");
     }
 
     public async void JoinLobby()
@@ -86,6 +92,7 @@ public class LobbyManager : MonoBehaviour
         if (string.IsNullOrEmpty(code))
         {
             Debug.Log("No code entered.");
+            SetStatus("Please enter a lobby code.");
             return;
         }
 
@@ -105,10 +112,14 @@ public class LobbyManager : MonoBehaviour
             string joinedName = GetLocalDisplayName();
             playerListText.text = "Players:\n- " + joinedName;
             LobbyGameBootstrap.SetLobbyPlayers(new[] { joinedName });
+
+            SetStatus("Joined lobby. Waiting for host to start game.");
+
         }
         catch (SessionException e)
         {
             Debug.LogError("Failed to join lobby: " + e.Message);
+            SetStatus("Failed to join lobby.");
         }
     }
 
@@ -117,12 +128,14 @@ public class LobbyManager : MonoBehaviour
         if (!isHost)
         {
             Debug.LogWarning("Only the host can start the game.");
+            SetStatus("Only the host can start the game.");
             return;
         }
 
         if (activeSession == null)
         {
             Debug.LogWarning("Cannot start game: no active session.");
+            SetStatus("No active lobby session.");
             return;
         }
 
@@ -131,10 +144,32 @@ public class LobbyManager : MonoBehaviour
             NetworkManager.Singleton.IsServer)
         {
             NetworkManager.Singleton.SceneManager.LoadScene(GameplaySceneName, LoadSceneMode.Single);
+            SetStatus("Starting game...");
             return;
         }
 
         Debug.LogWarning("NetworkManager server is not active; loading scene locally as fallback.");
+        SetStatus("Starting local game fallback.");
         SceneManager.LoadScene(GameplaySceneName, LoadSceneMode.Single);
+    }
+
+    private void OnApplicationQuit()
+    {
+        LobbyGameBootstrap.SetLobbyPlayers(null);
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            NetworkManager.Singleton.Shutdown();
+        }
+    }
+
+    private void SetStatus(string message)
+    {
+        if (statusText != null)
+        {
+            statusText.text = message;
+        }
+
+        Debug.Log(message);
     }
 }
