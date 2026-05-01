@@ -752,7 +752,6 @@ public class EscapeHomelessnessGameManager : NetworkBehaviour
         }
     }
 
-
     [ServerRpc(RequireOwnership = false)]
     private void RequestPlayTurnServerRpc()
     {
@@ -828,5 +827,6 @@ public class EscapeHomelessnessGameManager : NetworkBehaviour
 
         UpdateSingleTokenPosition(CurrentPlayer);
     }
+
 
 }

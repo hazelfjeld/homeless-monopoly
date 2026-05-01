@@ -67,6 +67,7 @@ public class LobbyManager : MonoBehaviour
             playerListText.text = "Players:\n- " + hostName;
             LobbyGameBootstrap.SetLobbyPlayers(new[] { hostName });
             SetStatus("Lobby created. Share the code and wait for players.");
+
         }
         catch (SessionException e)
         {
@@ -111,7 +112,9 @@ public class LobbyManager : MonoBehaviour
             string joinedName = GetLocalDisplayName();
             playerListText.text = "Players:\n- " + joinedName;
             LobbyGameBootstrap.SetLobbyPlayers(new[] { joinedName });
+
             SetStatus("Joined lobby. Waiting for host to start game.");
+
         }
         catch (SessionException e)
         {
