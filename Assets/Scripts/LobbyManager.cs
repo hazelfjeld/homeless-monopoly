@@ -2,6 +2,9 @@ using UnityEngine;
 using TMPro;
 using System.Threading.Tasks;
 using Unity.Services.Multiplayer;
+using UnityEngine.SceneManagement;
+using Unity.Netcode;
+using Unity.Services.Authentication;
 
 public class LobbyManager : MonoBehaviour
 {
@@ -14,9 +17,29 @@ public class LobbyManager : MonoBehaviour
     public TMP_InputField joinCodeInput;
 
     private ISession activeSession;
+    private bool isHost;
+    private const string GameplaySceneName = "MainScene";
+
+    private string GetLocalDisplayName()
+    {
+        if (!AuthenticationService.Instance.IsSignedIn)
+        {
+            return "Player";
+        }
+
+        string playerId = AuthenticationService.Instance.PlayerId;
+
+        if (string.IsNullOrWhiteSpace(playerId) || playerId.Length <= 6)
+        {
+            return "Player";
+        }
+
+        return "Player-" + playerId.Substring(0, 6);
+    }
 
     public async void HostLobby()
     {
+        isHost = true;
         mainMenuPanel.SetActive(false);
         hostLobbyPanel.SetActive(true);
 
@@ -38,7 +61,9 @@ public class LobbyManager : MonoBehaviour
             activeSession = await MultiplayerService.Instance.CreateSessionAsync(options);
 
             lobbyCodeText.text = "Code: " + activeSession.Code;
-            playerListText.text = "Players:\n- Host";
+            string hostName = GetLocalDisplayName();
+            playerListText.text = "Players:\n- " + hostName;
+            LobbyGameBootstrap.SetLobbyPlayers(new[] { hostName });
         }
         catch (SessionException e)
         {
@@ -55,6 +80,7 @@ public class LobbyManager : MonoBehaviour
 
     public async void JoinLobby()
     {
+        isHost = false;
         string code = joinCodeInput.text.Trim();
 
         if (string.IsNullOrEmpty(code))
@@ -76,11 +102,39 @@ public class LobbyManager : MonoBehaviour
             hostLobbyPanel.SetActive(true);
 
             lobbyCodeText.text = "Code: " + activeSession.Code;
-            playerListText.text = "Players:\n- Joined Player";
+            string joinedName = GetLocalDisplayName();
+            playerListText.text = "Players:\n- " + joinedName;
+            LobbyGameBootstrap.SetLobbyPlayers(new[] { joinedName });
         }
         catch (SessionException e)
         {
             Debug.LogError("Failed to join lobby: " + e.Message);
         }
+    }
+
+    public void StartGameAsHost()
+    {
+        if (!isHost)
+        {
+            Debug.LogWarning("Only the host can start the game.");
+            return;
+        }
+
+        if (activeSession == null)
+        {
+            Debug.LogWarning("Cannot start game: no active session.");
+            return;
+        }
+
+        if (NetworkManager.Singleton != null &&
+            NetworkManager.Singleton.IsListening &&
+            NetworkManager.Singleton.IsServer)
+        {
+            NetworkManager.Singleton.SceneManager.LoadScene(GameplaySceneName, LoadSceneMode.Single);
+            return;
+        }
+
+        Debug.LogWarning("NetworkManager server is not active; loading scene locally as fallback.");
+        SceneManager.LoadScene(GameplaySceneName, LoadSceneMode.Single);
     }
 }

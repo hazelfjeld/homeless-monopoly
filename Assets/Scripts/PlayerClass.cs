@@ -14,6 +14,7 @@ public class Player
     public string Backstory;
 
     [Header("Board State")]
+    public int RuntimePlayerIndex;
     public int BoardIndex;
     public int TurnsToWait;
     public int CashAmount;
@@ -59,6 +60,7 @@ public class Player
         Age = 0;
         Backstory = "";
         BoardIndex = 0;
+        RuntimePlayerIndex = 0;
         TurnsToWait = 0;
         CashAmount = 0;
         PendingMovement = new MovementInstruction();

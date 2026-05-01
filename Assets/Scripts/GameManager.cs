@@ -84,7 +84,46 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
     public void StartGameWithAllTemplates()
     {
+        if (LobbyGameBootstrap.LobbyPlayerNames != null && LobbyGameBootstrap.LobbyPlayerNames.Count > 0)
+        {
+            StartGameFromLobbyPlayers(LobbyGameBootstrap.LobbyPlayerNames);
+            return;
+        }
+
         StartGame(characterTemplates);
+    }
+
+    public void StartGameFromLobbyPlayers(IReadOnlyList<string> lobbyPlayerNames)
+    {
+        if (lobbyPlayerNames == null || lobbyPlayerNames.Count == 0)
+        {
+            StartGame(characterTemplates);
+            return;
+        }
+
+        List<Player> selectedTemplates = new List<Player>();
+
+        for (int playerIndex = 0; playerIndex < lobbyPlayerNames.Count; playerIndex++)
+        {
+            if (characterTemplates == null || characterTemplates.Count == 0)
+            {
+                break;
+            }
+
+            Player chosenTemplate = characterTemplates[playerIndex % characterTemplates.Count];
+
+            if (chosenTemplate == null)
+            {
+                continue;
+            }
+
+            Player runtimeTemplate = chosenTemplate.Clone();
+            runtimeTemplate.CharacterName = lobbyPlayerNames[playerIndex];
+            runtimeTemplate.RuntimePlayerIndex = playerIndex;
+            selectedTemplates.Add(runtimeTemplate);
+        }
+
+        StartGame(selectedTemplates);
     }
 
     public void StartGame(List<Player> selectedCharacterTemplates)
@@ -116,6 +155,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
             Player runtimePlayer = templatePlayer.Clone();
             runtimePlayer.ResetForNewRun(GetStartingBoardIndex());
+            runtimePlayer.RuntimePlayerIndex = activePlayers.Count;
             activePlayers.Add(runtimePlayer);
         }
 
