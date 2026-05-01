@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 
-public class EscapeHomelessnessGameManager : MonoBehaviour
+public class EscapeHomelessnessGameManager : NetworkBehaviour
 {
     [Header("Board")]
     [SerializeField] private List<BoardSpaceData> boardSpaces = new List<BoardSpaceData>();
@@ -33,6 +35,14 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     [SerializeField] private bool waitingForCardButtonPress;
     [SerializeField] private BoardSpaceType requiredCardButtonType = BoardSpaceType.Start;
 
+
+    private readonly NetworkVariable<int> netCurrentPlayerIndex = new NetworkVariable<int>(0);
+    private readonly NetworkVariable<bool> netWaitingForCardButtonPress = new NetworkVariable<bool>(false);
+    private readonly NetworkVariable<int> netRequiredCardButtonType = new NetworkVariable<int>((int)BoardSpaceType.Start);
+    private readonly NetworkVariable<bool> netGameIsOver = new NetworkVariable<bool>(false);
+    private readonly NetworkVariable<FixedString512Bytes> netLastTurnSummary = new NetworkVariable<FixedString512Bytes>(default);
+    private NetworkList<int> netBoardPositions;
+
     public string LastTurnSummary => lastTurnSummary;
     public bool GameIsOver => gameIsOver;
     public bool WaitingForCardButtonPress => waitingForCardButtonPress;
@@ -58,7 +68,19 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
     private void Awake()
     {
+        netBoardPositions = new NetworkList<int>();
         LoadDeckData();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        netCurrentPlayerIndex.OnValueChanged += (_, __) => ApplyNetworkState();
+        netWaitingForCardButtonPress.OnValueChanged += (_, __) => ApplyNetworkState();
+        netRequiredCardButtonType.OnValueChanged += (_, __) => ApplyNetworkState();
+        netGameIsOver.OnValueChanged += (_, __) => ApplyNetworkState();
+        netLastTurnSummary.OnValueChanged += (_, __) => ApplyNetworkState();
+        netBoardPositions.OnListChanged += _ => ApplyNetworkState();
+        ApplyNetworkState();
     }
 
     private void Start()
@@ -84,7 +106,46 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
     public void StartGameWithAllTemplates()
     {
+        if (LobbyGameBootstrap.LobbyPlayerNames != null && LobbyGameBootstrap.LobbyPlayerNames.Count > 0)
+        {
+            StartGameFromLobbyPlayers(LobbyGameBootstrap.LobbyPlayerNames);
+            return;
+        }
+
         StartGame(characterTemplates);
+    }
+
+    public void StartGameFromLobbyPlayers(IReadOnlyList<string> lobbyPlayerNames)
+    {
+        if (lobbyPlayerNames == null || lobbyPlayerNames.Count == 0)
+        {
+            StartGame(characterTemplates);
+            return;
+        }
+
+        List<Player> selectedTemplates = new List<Player>();
+
+        for (int playerIndex = 0; playerIndex < lobbyPlayerNames.Count; playerIndex++)
+        {
+            if (characterTemplates == null || characterTemplates.Count == 0)
+            {
+                break;
+            }
+
+            Player chosenTemplate = characterTemplates[playerIndex % characterTemplates.Count];
+
+            if (chosenTemplate == null)
+            {
+                continue;
+            }
+
+            Player runtimeTemplate = chosenTemplate.Clone();
+            runtimeTemplate.CharacterName = lobbyPlayerNames[playerIndex];
+            runtimeTemplate.RuntimePlayerIndex = playerIndex;
+            selectedTemplates.Add(runtimeTemplate);
+        }
+
+        StartGame(selectedTemplates);
     }
 
     public void StartGame(List<Player> selectedCharacterTemplates)
@@ -116,6 +177,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
             Player runtimePlayer = templatePlayer.Clone();
             runtimePlayer.ResetForNewRun(GetStartingBoardIndex());
+            runtimePlayer.RuntimePlayerIndex = activePlayers.Count;
             activePlayers.Add(runtimePlayer);
         }
 
@@ -139,31 +201,43 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
 
         UpdateSingleTokenPosition(CurrentPlayer);
         BeginCurrentPlayerTurn();
+
+        if (IsServer)
+        {
+            SyncNetworkState();
+        }
     }
 
     public void PlayCurrentPlayerTurn()
     {
-        BeginCurrentPlayerTurn();
+        if (IsServer)
+        {
+            BeginCurrentPlayerTurn();
+            SyncNetworkState();
+            return;
+        }
+
+        RequestPlayTurnServerRpc();
     }
 
     public void PressStopButton()
     {
-        TryResolveCardButton(BoardSpaceType.Stop);
+        RequestCardButtonServerRpc((int)BoardSpaceType.Stop);
     }
 
     public void PressGoButton()
     {
-        TryResolveCardButton(BoardSpaceType.Go);
+        RequestCardButtonServerRpc((int)BoardSpaceType.Go);
     }
 
     public void PressCommunityButton()
     {
-        TryResolveCardButton(BoardSpaceType.Community);
+        RequestCardButtonServerRpc((int)BoardSpaceType.Community);
     }
 
     public void PressQuestionButton()
     {
-        TryResolveCardButton(BoardSpaceType.Question);
+        RequestCardButtonServerRpc((int)BoardSpaceType.Question);
     }
 
     private void BeginCurrentPlayerTurn()
@@ -677,4 +751,82 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
                 return null;
         }
     }
+
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestPlayTurnServerRpc()
+    {
+        if (gameIsOver || !IsLocalLobbyTurn())
+        {
+            return;
+        }
+
+        BeginCurrentPlayerTurn();
+        SyncNetworkState();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestCardButtonServerRpc(int pressedButtonType)
+    {
+        if (gameIsOver || !IsLocalLobbyTurn())
+        {
+            return;
+        }
+
+        TryResolveCardButton((BoardSpaceType)pressedButtonType);
+        SyncNetworkState();
+    }
+
+    private bool IsLocalLobbyTurn()
+    {
+        if (CurrentPlayer == null || LobbyGameBootstrap.LobbyPlayerNames == null || LobbyGameBootstrap.LobbyPlayerNames.Count == 0)
+        {
+            return true;
+        }
+
+        return CurrentPlayer.CharacterName == LobbyGameBootstrap.LobbyPlayerNames[0];
+    }
+
+    private void SyncNetworkState()
+    {
+        if (!IsServer)
+        {
+            return;
+        }
+
+        netCurrentPlayerIndex.Value = currentPlayerIndex;
+        netWaitingForCardButtonPress.Value = waitingForCardButtonPress;
+        netRequiredCardButtonType.Value = (int)requiredCardButtonType;
+        netGameIsOver.Value = gameIsOver;
+        netLastTurnSummary.Value = lastTurnSummary;
+
+        netBoardPositions.Clear();
+        for (int i = 0; i < activePlayers.Count; i++)
+        {
+            netBoardPositions.Add(activePlayers[i].BoardIndex);
+        }
+    }
+
+    private void ApplyNetworkState()
+    {
+        if (IsServer)
+        {
+            return;
+        }
+
+        currentPlayerIndex = netCurrentPlayerIndex.Value;
+        waitingForCardButtonPress = netWaitingForCardButtonPress.Value;
+        requiredCardButtonType = (BoardSpaceType)netRequiredCardButtonType.Value;
+        gameIsOver = netGameIsOver.Value;
+        lastTurnSummary = netLastTurnSummary.Value.ToString();
+
+        int count = Mathf.Min(activePlayers.Count, netBoardPositions.Count);
+        for (int i = 0; i < count; i++)
+        {
+            activePlayers[i].BoardIndex = netBoardPositions[i];
+        }
+
+        UpdateSingleTokenPosition(CurrentPlayer);
+    }
+
 }
