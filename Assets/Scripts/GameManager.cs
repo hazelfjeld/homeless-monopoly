@@ -1,6 +1,9 @@
 using System.Collections;
+using System;
 using System.Collections.Generic;
 using TMPro;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 using System.Text;
 
@@ -11,7 +14,7 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     [SerializeField] private GameObject winScreenPanel;
     [SerializeField] private TMP_Text winScreenTitleText;
     [SerializeField] private TMP_Text winScreenBodyText;
-    [SerializeField] private string donationUrl = "https://www.google.com";
+    [SerializeField] private string donationUrl = "https://endhomelessness.org/other-ways-to-give/";
 
     [Header("Player Status UI")]
     [SerializeField] private GameObject playerStatusPanel;
@@ -65,6 +68,22 @@ public class EscapeHomelessnessGameManager : MonoBehaviour
     [SerializeField] private BoardSpaceType requiredCardButtonType = BoardSpaceType.Start;
     [SerializeField] private bool waitingForPopupClose;
     [SerializeField] private bool turnBusy;
+
+    [Header("Multiplayer")]
+    [SerializeField] private bool enableMultiplayerWhenNetworkConnected = true;
+    [SerializeField] private float multiplayerStartDelaySeconds = 0.25f;
+
+    private const string SnapshotMessageName = "EscapeHomelessness.Snapshot";
+    private const string ActionMessageName = "EscapeHomelessness.Action";
+
+    private readonly List<ulong> activePlayerOwnerClientIds = new List<ulong>();
+    private readonly List<Transform> runtimeTokenTransforms = new List<Transform>();
+    private bool multiplayerMode;
+    private bool multiplayerHost;
+    private bool networkMessagesRegistered;
+    private bool applyingNetworkSnapshot;
+    private string currentPopupTitle = "";
+    private string currentPopupBody = "";
 
     public string LastTurnSummary => lastTurnSummary;
     public bool GameIsOver => gameIsOver;
@@ -283,6 +302,11 @@ private void HideWinScreen()
 
     private void Start()
     {
+        if (TryStartNetworkedGame())
+        {
+            return;
+        }
+
         if (showCharacterSelectOnStart)
         {
             ShowCharacterSelect();
@@ -293,6 +317,148 @@ private void HideWinScreen()
         {
             StartGameWithAllTemplates();
         }
+    }
+
+    private bool TryStartNetworkedGame()
+    {
+        NetworkManager networkManager = NetworkManager.Singleton;
+
+        if (!enableMultiplayerWhenNetworkConnected ||
+            networkManager == null ||
+            !networkManager.IsListening)
+        {
+            return false;
+        }
+
+        multiplayerMode = true;
+        multiplayerHost = networkManager.IsHost || networkManager.IsServer;
+        RegisterNetworkMessages();
+        HideCharacterSelect();
+        HideCardPopup();
+        HideWinScreen();
+
+        if (multiplayerHost)
+        {
+            StartCoroutine(StartHostMultiplayerGameAfterSceneReady());
+        }
+        else
+        {
+            SetStatus("Connected. Waiting for the host to start the game.");
+            StartCoroutine(RequestSnapshotUntilReceived());
+        }
+
+        return true;
+    }
+
+    private IEnumerator RequestSnapshotUntilReceived()
+    {
+        const int maxAttempts = 10;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            if (!multiplayerMode || multiplayerHost || activePlayers.Count > 0)
+            {
+                yield break;
+            }
+
+            SendMultiplayerAction(MultiplayerGameAction.RequestSnapshot());
+            yield return new WaitForSeconds(1f);
+        }
+    }
+
+    private IEnumerator StartHostMultiplayerGameAfterSceneReady()
+    {
+        if (multiplayerStartDelaySeconds > 0f)
+        {
+            yield return new WaitForSeconds(multiplayerStartDelaySeconds);
+        }
+        else
+        {
+            yield return null;
+        }
+
+        List<ulong> ownerClientIds = BuildPlayerOwnerList();
+        List<Player> selectedCharacterTemplates = BuildMultiplayerCharacterList(ownerClientIds.Count);
+
+        if (selectedCharacterTemplates.Count == 0)
+        {
+            SetStatus("No character templates are available for multiplayer.");
+            yield break;
+        }
+
+        activePlayerOwnerClientIds.Clear();
+        int playerCount = Mathf.Min(ownerClientIds.Count, selectedCharacterTemplates.Count);
+
+        for (int playerIndex = 0; playerIndex < playerCount; playerIndex++)
+        {
+            activePlayerOwnerClientIds.Add(ownerClientIds[playerIndex]);
+        }
+
+        StartGame(selectedCharacterTemplates);
+        BroadcastMultiplayerSnapshot();
+    }
+
+    private void OnDestroy()
+    {
+        if (!networkMessagesRegistered || NetworkManager.Singleton == null)
+        {
+            return;
+        }
+
+        CustomMessagingManager messagingManager = NetworkManager.Singleton.CustomMessagingManager;
+
+        if (messagingManager == null)
+        {
+            return;
+        }
+
+        messagingManager.UnregisterNamedMessageHandler(SnapshotMessageName);
+        messagingManager.UnregisterNamedMessageHandler(ActionMessageName);
+        NetworkManager.Singleton.OnClientConnectedCallback -= OnNetworkClientConnected;
+        networkMessagesRegistered = false;
+    }
+
+    private List<ulong> BuildPlayerOwnerList()
+    {
+        List<ulong> ownerClientIds = new List<ulong>();
+        NetworkManager networkManager = NetworkManager.Singleton;
+
+        if (networkManager != null)
+        {
+            ownerClientIds.AddRange(networkManager.ConnectedClientsIds);
+            ownerClientIds.Sort();
+        }
+
+        if (ownerClientIds.Count == 0 && networkManager != null)
+        {
+            ownerClientIds.Add(networkManager.LocalClientId);
+        }
+
+        return ownerClientIds;
+    }
+
+    private List<Player> BuildMultiplayerCharacterList(int requestedPlayerCount)
+    {
+        List<Player> selectedCharacterTemplates = new List<Player>();
+
+        if (characterTemplates == null)
+        {
+            return selectedCharacterTemplates;
+        }
+
+        int playerCount = Mathf.Min(requestedPlayerCount, characterTemplates.Count);
+
+        for (int templateIndex = 0; templateIndex < playerCount; templateIndex++)
+        {
+            Player templatePlayer = characterTemplates[templateIndex];
+
+            if (templatePlayer != null)
+            {
+                selectedCharacterTemplates.Add(templatePlayer);
+            }
+        }
+
+        return selectedCharacterTemplates;
     }
 
     private void LoadDeckData()
@@ -352,6 +518,7 @@ private void HideWinScreen()
             return;
         }
 
+        TrimMultiplayerOwnerListToActivePlayers();
         currentPlayerIndex = 0;
         gameIsOver = false;
         waitingForCardButtonPress = false;
@@ -365,10 +532,32 @@ private void HideWinScreen()
         questionDeck.ResetDeck();
         HideWinScreen();
         HideCardPopup();
-        UpdateSingleTokenPosition(CurrentPlayer);
+        EnsureTokenVisuals(activePlayers.Count);
+        UpdateAllTokenPositions();
         RefreshPlayerStatusPopup();
         SetStatus("Game started.");
         BeginCurrentPlayerTurn();
+    }
+
+    private void TrimMultiplayerOwnerListToActivePlayers()
+    {
+        if (!multiplayerMode)
+        {
+            return;
+        }
+
+        while (activePlayerOwnerClientIds.Count > activePlayers.Count)
+        {
+            activePlayerOwnerClientIds.RemoveAt(activePlayerOwnerClientIds.Count - 1);
+        }
+
+        NetworkManager networkManager = NetworkManager.Singleton;
+        ulong fallbackOwner = networkManager != null ? networkManager.LocalClientId : 0;
+
+        while (activePlayerOwnerClientIds.Count < activePlayers.Count)
+        {
+            activePlayerOwnerClientIds.Add(fallbackOwner);
+        }
     }
 
 
@@ -557,25 +746,61 @@ private void HideWinScreen()
 
     public void PressStopButton()
     {
-        TryResolveCardButton(BoardSpaceType.Stop);
+        SubmitCardButtonAction(BoardSpaceType.Stop);
     }
 
     public void PressGoButton()
     {
-        TryResolveCardButton(BoardSpaceType.Go);
+        SubmitCardButtonAction(BoardSpaceType.Go);
     }
 
     public void PressCommunityButton()
     {
-        TryResolveCardButton(BoardSpaceType.Community);
+        SubmitCardButtonAction(BoardSpaceType.Community);
     }
 
     public void PressQuestionButton()
     {
-        TryResolveCardButton(BoardSpaceType.Question);
+        SubmitCardButtonAction(BoardSpaceType.Question);
+    }
+
+    private void SubmitCardButtonAction(BoardSpaceType boardSpaceType)
+    {
+        if (!CanLocalPlayerActOnCurrentTurn())
+        {
+            SetStatus(BuildNotYourTurnMessage());
+            return;
+        }
+
+        if (multiplayerMode && !multiplayerHost)
+        {
+            SendMultiplayerAction(MultiplayerGameAction.CardButton(boardSpaceType));
+            return;
+        }
+
+        TryResolveCardButton(boardSpaceType);
+        BroadcastMultiplayerSnapshot();
     }
 
     public void CloseCardPopup()
+    {
+        if (!CanLocalPlayerActOnCurrentTurn())
+        {
+            SetStatus(BuildNotYourTurnMessage());
+            return;
+        }
+
+        if (multiplayerMode && !multiplayerHost)
+        {
+            SendMultiplayerAction(MultiplayerGameAction.ClosePopup());
+            return;
+        }
+
+        ResolveCloseCardPopup();
+        BroadcastMultiplayerSnapshot();
+    }
+
+    private void ResolveCloseCardPopup()
     {
         if (!waitingForPopupClose)
         {
@@ -594,6 +819,51 @@ private void HideWinScreen()
         }
 
         StartCoroutine(ResolveAutomaticMovementAndEndTurn(activePlayer));
+    }
+
+    private bool CanLocalPlayerActOnCurrentTurn()
+    {
+        if (!multiplayerMode)
+        {
+            return true;
+        }
+
+        if (CurrentPlayer == null)
+        {
+            return false;
+        }
+
+        NetworkManager networkManager = NetworkManager.Singleton;
+
+        if (networkManager == null)
+        {
+            return true;
+        }
+
+        return GetCurrentTurnOwnerClientId() == networkManager.LocalClientId;
+    }
+
+    private string BuildNotYourTurnMessage()
+    {
+        Player activePlayer = CurrentPlayer;
+
+        if (activePlayer == null)
+        {
+            return "Waiting for the game to start.";
+        }
+
+        return $"It is {activePlayer.CharacterName}'s turn.";
+    }
+
+    private ulong GetCurrentTurnOwnerClientId()
+    {
+        if (currentPlayerIndex < 0 || currentPlayerIndex >= activePlayerOwnerClientIds.Count)
+        {
+            NetworkManager networkManager = NetworkManager.Singleton;
+            return networkManager != null ? networkManager.LocalClientId : 0;
+        }
+
+        return activePlayerOwnerClientIds[currentPlayerIndex];
     }
 
     private void BeginCurrentPlayerTurn()
@@ -1018,7 +1288,16 @@ private void HideWinScreen()
             return;
         }
 
-        if (playerTokenTransform == null)
+        int playerIndex = activePlayers.IndexOf(player);
+
+        if (playerIndex < 0)
+        {
+            playerIndex = 0;
+        }
+
+        EnsureTokenVisuals(activePlayers.Count);
+
+        if (playerIndex >= runtimeTokenTransforms.Count)
         {
             return;
         }
@@ -1035,11 +1314,83 @@ private void HideWinScreen()
             return;
         }
 
-        playerTokenTransform.position = currentSpace.WorldPosition.position + tokenOffset;
+        runtimeTokenTransforms[playerIndex].position =
+            currentSpace.WorldPosition.position + GetTokenOffsetForPlayer(playerIndex);
+    }
+
+    private void UpdateAllTokenPositions()
+    {
+        EnsureTokenVisuals(activePlayers.Count);
+
+        for (int playerIndex = 0; playerIndex < activePlayers.Count; playerIndex++)
+        {
+            UpdateSingleTokenPosition(activePlayers[playerIndex]);
+        }
+    }
+
+    private void EnsureTokenVisuals(int playerCount)
+    {
+        if (playerTokenTransform == null)
+        {
+            return;
+        }
+
+        if (runtimeTokenTransforms.Count == 0)
+        {
+            runtimeTokenTransforms.Add(playerTokenTransform);
+            ApplyTokenColor(playerTokenTransform, 0);
+        }
+
+        while (runtimeTokenTransforms.Count < playerCount)
+        {
+            Transform tokenTransform = Instantiate(playerTokenTransform, playerTokenTransform.parent);
+            tokenTransform.name = $"PlayerToken_{runtimeTokenTransforms.Count + 1}";
+            runtimeTokenTransforms.Add(tokenTransform);
+            ApplyTokenColor(tokenTransform, runtimeTokenTransforms.Count - 1);
+        }
+
+        for (int tokenIndex = 0; tokenIndex < runtimeTokenTransforms.Count; tokenIndex++)
+        {
+            if (runtimeTokenTransforms[tokenIndex] != null)
+            {
+                runtimeTokenTransforms[tokenIndex].gameObject.SetActive(tokenIndex < playerCount);
+            }
+        }
+    }
+
+    private void ApplyTokenColor(Transform tokenTransform, int playerIndex)
+    {
+        SpriteRenderer spriteRenderer = tokenTransform.GetComponent<SpriteRenderer>();
+
+        if (spriteRenderer == null)
+        {
+            return;
+        }
+
+        Color[] tokenColors =
+        {
+            new Color(0.16f, 0.46f, 0.95f),
+            new Color(0.9f, 0.22f, 0.18f),
+            new Color(0.14f, 0.68f, 0.32f),
+            new Color(0.95f, 0.72f, 0.18f)
+        };
+
+        spriteRenderer.color = tokenColors[playerIndex % tokenColors.Length];
+    }
+
+    private Vector3 GetTokenOffsetForPlayer(int playerIndex)
+    {
+        float horizontalOffset = ((playerIndex % 2) - 0.5f) * 0.2f;
+        float verticalOffset = (playerIndex / 2) * 0.16f;
+
+        return tokenOffset + new Vector3(horizontalOffset, verticalOffset, 0f);
     }
 
     private void ShowCardPopup(string title, string body)
     {
+        currentPopupTitle = title;
+        currentPopupBody = body;
+
         if (cardPopupTitleText != null)
         {
             cardPopupTitleText.text = title;
@@ -1058,6 +1409,12 @@ private void HideWinScreen()
 
     private void HideCardPopup()
     {
+        if (!waitingForPopupClose)
+        {
+            currentPopupTitle = "";
+            currentPopupBody = "";
+        }
+
         if (cardPopupPanel != null)
         {
             cardPopupPanel.SetActive(false);
@@ -1074,6 +1431,7 @@ private void HideWinScreen()
         }
 
         Debug.Log(message);
+        BroadcastMultiplayerSnapshot();
     }
 
     private int FindFirstSpaceOfType(BoardSpaceType targetSpaceType)
@@ -1257,6 +1615,321 @@ private void HideWinScreen()
         return currentSpace.SpaceType.ToString();
     }
 
+    private void RegisterNetworkMessages()
+    {
+        if (networkMessagesRegistered || NetworkManager.Singleton == null)
+        {
+            return;
+        }
+
+        CustomMessagingManager messagingManager = NetworkManager.Singleton.CustomMessagingManager;
+
+        if (messagingManager == null)
+        {
+            return;
+        }
+
+        messagingManager.RegisterNamedMessageHandler(SnapshotMessageName, OnSnapshotMessageReceived);
+        NetworkManager.Singleton.OnClientConnectedCallback -= OnNetworkClientConnected;
+        NetworkManager.Singleton.OnClientConnectedCallback += OnNetworkClientConnected;
+
+        if (multiplayerHost)
+        {
+            messagingManager.RegisterNamedMessageHandler(ActionMessageName, OnActionMessageReceived);
+        }
+
+        networkMessagesRegistered = true;
+    }
+
+    private void OnNetworkClientConnected(ulong clientId)
+    {
+        if (multiplayerHost && activePlayers.Count > 0)
+        {
+            SendSnapshotToClient(clientId);
+        }
+    }
+
+    private void OnSnapshotMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
+    {
+        if (multiplayerHost)
+        {
+            return;
+        }
+
+        string json = ReadJsonMessage(messagePayload);
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return;
+        }
+
+        MultiplayerGameSnapshot snapshot = JsonUtility.FromJson<MultiplayerGameSnapshot>(json);
+        ApplyMultiplayerSnapshot(snapshot);
+    }
+
+    private void OnActionMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
+    {
+        if (!multiplayerHost)
+        {
+            return;
+        }
+
+        string json = ReadJsonMessage(messagePayload);
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return;
+        }
+
+        MultiplayerGameAction action = JsonUtility.FromJson<MultiplayerGameAction>(json);
+
+        if (action.ActionType == MultiplayerGameAction.RequestSnapshotAction)
+        {
+            SendSnapshotToClient(senderClientId);
+            return;
+        }
+
+        if (!SenderOwnsCurrentTurn(senderClientId))
+        {
+            SendSnapshotToClient(senderClientId);
+            return;
+        }
+
+        if (action.ActionType == MultiplayerGameAction.CardButtonAction)
+        {
+            TryResolveCardButton((BoardSpaceType)action.BoardSpaceType);
+        }
+        else if (action.ActionType == MultiplayerGameAction.ClosePopupAction)
+        {
+            ResolveCloseCardPopup();
+        }
+
+        BroadcastMultiplayerSnapshot();
+    }
+
+    private bool SenderOwnsCurrentTurn(ulong senderClientId)
+    {
+        if (CurrentPlayer == null)
+        {
+            return false;
+        }
+
+        return GetCurrentTurnOwnerClientId() == senderClientId;
+    }
+
+    private void SendMultiplayerAction(MultiplayerGameAction action)
+    {
+        if (NetworkManager.Singleton == null)
+        {
+            SetStatus("Network is not ready yet.");
+            return;
+        }
+
+        string json = JsonUtility.ToJson(action);
+        SendJsonMessage(ActionMessageName, NetworkManager.ServerClientId, json);
+    }
+
+    private void BroadcastMultiplayerSnapshot()
+    {
+        if (!multiplayerMode || !multiplayerHost || applyingNetworkSnapshot)
+        {
+            return;
+        }
+
+        if (activePlayers == null || activePlayers.Count == 0)
+        {
+            return;
+        }
+
+        NetworkManager networkManager = NetworkManager.Singleton;
+
+        if (networkManager == null || !networkManager.IsListening)
+        {
+            return;
+        }
+
+        MultiplayerGameSnapshot snapshot = CreateMultiplayerSnapshot();
+        string json = JsonUtility.ToJson(snapshot);
+        List<ulong> recipientClientIds = new List<ulong>();
+
+        foreach (ulong clientId in networkManager.ConnectedClientsIds)
+        {
+            if (clientId != networkManager.LocalClientId)
+            {
+                recipientClientIds.Add(clientId);
+            }
+        }
+
+        if (recipientClientIds.Count == 0)
+        {
+            return;
+        }
+
+        SendJsonMessage(SnapshotMessageName, recipientClientIds, json);
+    }
+
+    private void SendSnapshotToClient(ulong clientId)
+    {
+        if (!multiplayerMode || !multiplayerHost || activePlayers.Count == 0)
+        {
+            return;
+        }
+
+        string json = JsonUtility.ToJson(CreateMultiplayerSnapshot());
+        SendJsonMessage(SnapshotMessageName, clientId, json);
+    }
+
+    private MultiplayerGameSnapshot CreateMultiplayerSnapshot()
+    {
+        MultiplayerGameSnapshot snapshot = new MultiplayerGameSnapshot
+        {
+            CurrentPlayerIndex = currentPlayerIndex,
+            GameIsOver = gameIsOver,
+            LastTurnSummary = lastTurnSummary,
+            WaitingForCardButtonPress = waitingForCardButtonPress,
+            RequiredCardButtonType = (int)requiredCardButtonType,
+            WaitingForPopupClose = waitingForPopupClose,
+            TurnBusy = turnBusy,
+            PopupTitle = currentPopupTitle,
+            PopupBody = currentPopupBody,
+            SessionCode = MultiplayerSessionContext.SessionCode
+        };
+
+        for (int playerIndex = 0; playerIndex < activePlayers.Count; playerIndex++)
+        {
+            snapshot.Players.Add(activePlayers[playerIndex].Clone());
+
+            ulong ownerClientId = playerIndex < activePlayerOwnerClientIds.Count
+                ? activePlayerOwnerClientIds[playerIndex]
+                : GetCurrentTurnOwnerClientId();
+
+            snapshot.OwnerClientIds.Add(ownerClientId.ToString());
+        }
+
+        return snapshot;
+    }
+
+    private void ApplyMultiplayerSnapshot(MultiplayerGameSnapshot snapshot)
+    {
+        if (snapshot == null)
+        {
+            return;
+        }
+
+        applyingNetworkSnapshot = true;
+
+        activePlayers.Clear();
+
+        for (int playerIndex = 0; playerIndex < snapshot.Players.Count; playerIndex++)
+        {
+            Player snapshotPlayer = snapshot.Players[playerIndex];
+
+            if (snapshotPlayer != null)
+            {
+                activePlayers.Add(snapshotPlayer.Clone());
+            }
+        }
+
+        activePlayerOwnerClientIds.Clear();
+
+        for (int ownerIndex = 0; ownerIndex < snapshot.OwnerClientIds.Count; ownerIndex++)
+        {
+            if (ulong.TryParse(snapshot.OwnerClientIds[ownerIndex], out ulong ownerClientId))
+            {
+                activePlayerOwnerClientIds.Add(ownerClientId);
+            }
+        }
+
+        TrimMultiplayerOwnerListToActivePlayers();
+        currentPlayerIndex = Mathf.Clamp(snapshot.CurrentPlayerIndex, 0, Mathf.Max(activePlayers.Count - 1, 0));
+        gameIsOver = snapshot.GameIsOver;
+        lastTurnSummary = snapshot.LastTurnSummary;
+        waitingForCardButtonPress = snapshot.WaitingForCardButtonPress;
+        requiredCardButtonType = (BoardSpaceType)snapshot.RequiredCardButtonType;
+        waitingForPopupClose = snapshot.WaitingForPopupClose;
+        turnBusy = snapshot.TurnBusy;
+        currentPopupTitle = snapshot.PopupTitle;
+        currentPopupBody = snapshot.PopupBody;
+
+        HideCharacterSelect();
+        EnsureTokenVisuals(activePlayers.Count);
+        UpdateAllTokenPositions();
+        RefreshPlayerStatusPopup();
+
+        if (statusText != null)
+        {
+            statusText.text = lastTurnSummary;
+        }
+
+        if (waitingForPopupClose && !string.IsNullOrWhiteSpace(currentPopupTitle))
+        {
+            ShowCardPopup(currentPopupTitle, currentPopupBody);
+        }
+        else
+        {
+            HideCardPopup();
+        }
+
+        if (gameIsOver)
+        {
+            ShowWinScreen(CurrentPlayer);
+        }
+        else
+        {
+            HideWinScreen();
+        }
+
+        applyingNetworkSnapshot = false;
+    }
+
+    private string ReadJsonMessage(FastBufferReader messagePayload)
+    {
+        messagePayload.ReadValueSafe(out string json);
+        return json;
+    }
+
+    private void SendJsonMessage(string messageName, ulong clientId, string json)
+    {
+        if (NetworkManager.Singleton == null ||
+            NetworkManager.Singleton.CustomMessagingManager == null)
+        {
+            return;
+        }
+
+        int writeSize = FastBufferWriter.GetWriteSize(json) + 128;
+        using (FastBufferWriter writer = new FastBufferWriter(writeSize, Allocator.Temp, writeSize * 2))
+        {
+            writer.WriteValueSafe(json);
+            NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage(
+                messageName,
+                clientId,
+                writer,
+                NetworkDelivery.ReliableFragmentedSequenced);
+        }
+    }
+
+    private void SendJsonMessage(string messageName, IReadOnlyList<ulong> clientIds, string json)
+    {
+        if (NetworkManager.Singleton == null ||
+            NetworkManager.Singleton.CustomMessagingManager == null ||
+            clientIds == null ||
+            clientIds.Count == 0)
+        {
+            return;
+        }
+
+        int writeSize = FastBufferWriter.GetWriteSize(json) + 128;
+        using (FastBufferWriter writer = new FastBufferWriter(writeSize, Allocator.Temp, writeSize * 2))
+        {
+            writer.WriteValueSafe(json);
+            NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage(
+                messageName,
+                clientIds,
+                writer,
+                NetworkDelivery.ReliableFragmentedSequenced);
+        }
+    }
+
     private CardDeck GetDeckForSpaceType(BoardSpaceType boardSpaceType)
     {
         switch (boardSpaceType)
@@ -1276,5 +1949,58 @@ private void HideWinScreen()
             default:
                 return null;
         }
+    }
+}
+
+[Serializable]
+public class MultiplayerGameSnapshot
+{
+    public List<Player> Players = new List<Player>();
+    public List<string> OwnerClientIds = new List<string>();
+    public int CurrentPlayerIndex;
+    public bool GameIsOver;
+    public string LastTurnSummary = "";
+    public bool WaitingForCardButtonPress;
+    public int RequiredCardButtonType;
+    public bool WaitingForPopupClose;
+    public bool TurnBusy;
+    public string PopupTitle = "";
+    public string PopupBody = "";
+    public string SessionCode = "";
+}
+
+[Serializable]
+public class MultiplayerGameAction
+{
+    public const string CardButtonAction = "CardButton";
+    public const string ClosePopupAction = "ClosePopup";
+    public const string RequestSnapshotAction = "RequestSnapshot";
+
+    public string ActionType = "";
+    public int BoardSpaceType;
+
+    public static MultiplayerGameAction CardButton(BoardSpaceType boardSpaceType)
+    {
+        return new MultiplayerGameAction
+        {
+            ActionType = CardButtonAction,
+            BoardSpaceType = (int)boardSpaceType
+        };
+    }
+
+    public static MultiplayerGameAction ClosePopup()
+    {
+        return new MultiplayerGameAction
+        {
+            ActionType = ClosePopupAction
+        };
+    }
+
+    public static MultiplayerGameAction RequestSnapshot()
+    {
+        return new MultiplayerGameAction
+        {
+            ActionType = RequestSnapshotAction
+        };
     }
 }

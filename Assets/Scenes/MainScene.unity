@@ -4574,7 +4574,7 @@ MonoBehaviour:
   winScreenPanel: {fileID: 493347350}
   winScreenTitleText: {fileID: 969166977}
   winScreenBodyText: {fileID: 478085358}
-  donationUrl: https://www.google.com
+  donationUrl: https://endhomelessness.org/other-ways-to-give/
   playerStatusPanel: {fileID: 761131466}
   playerStatusTitleText: {fileID: 1826819470}
   playerStatusBodyText: {fileID: 1111817631}

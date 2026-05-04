@@ -117,7 +117,7 @@ public static class EscapeHomelessnessCardLibrary
 
             RelativeCard(
                 "Birthday",
-                "It’s your birthday and no one cares. Move back 1 space.",
+                "It's your birthday and no one cares. Move back 1 space.",
                 CardType.Stop,
                 -1),
 
@@ -139,8 +139,8 @@ public static class EscapeHomelessnessCardLibrary
                 new CurrencyChange(CurrencyChangeMode.Set, 0)),
 
             TypeMoveCard(
-                "Can’t Afford ID",
-                "You can’t afford an ID. Move back to a yellow space.",
+                "Can't Afford ID",
+                "You can't afford an ID. Move back to a yellow space.",
                 CardType.Stop,
                 PreviousType(BoardSpaceType.Question),
                 new PlayerFlagChange(PlayerFlagType.HasId, false)),
@@ -164,7 +164,7 @@ public static class EscapeHomelessnessCardLibrary
 
             RelativeCard(
                 "No Address For Applications",
-                "You don’t have an address for applications. Move back 1 space.",
+                "You don't have an address for applications. Move back 1 space.",
                 CardType.Stop,
                 -1),
 
@@ -177,13 +177,13 @@ public static class EscapeHomelessnessCardLibrary
 
             RelativeCard(
                 "No Coat In The Cold",
-                "It’s 0° outside and you have no coat. Move back 2 spaces.",
+                "It's 0 degrees outside and you have no coat. Move back 2 spaces.",
                 CardType.Stop,
                 -2),
 
             RelativeCard(
                 "No Shade In The Heat",
-                "It’s 100° out and there is no shade. Move back 2 spaces.",
+                "It's 100 degrees out and there is no shade. Move back 2 spaces.",
                 CardType.Stop,
                 -2),
 
@@ -453,7 +453,7 @@ public static class EscapeHomelessnessCardLibrary
 
             PositiveConditionCard(
                 "Church Attendance Check",
-                "If you are in church 4–5 times a week. Move ahead 3 spaces.",
+                "If you are in church 4-5 times a week. Move ahead 3 spaces.",
                 PlayerCheckType.AttendsChurchFrequently,
                 3),
 
@@ -650,7 +650,7 @@ public static class EscapeHomelessnessCardLibrary
                 new PlayerFlagChange(PlayerFlagType.HasMedication, true)),
 
             RelativeCard(
-                "Hired At McDonald’s",
+                "Hired At McDonald's",
                 "You were hired at McDonald's. Move ahead 3 spaces.",
                 CardType.Go,
                 3,
