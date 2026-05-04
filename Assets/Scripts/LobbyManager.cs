@@ -52,6 +52,7 @@ public class LobbyManager : MonoBehaviour
     {
         try
         {
+            await UnityServicesInit.InitializeServices();
             ConfigureTransportForRelayWebSockets();
 
             var options = new SessionOptions
@@ -109,6 +110,7 @@ public class LobbyManager : MonoBehaviour
     {
         try
         {
+            await UnityServicesInit.InitializeServices();
             ConfigureTransportForRelayWebSockets();
 
             var options = new JoinSessionOptions()
